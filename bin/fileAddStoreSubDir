@@ -1,0 +1,79 @@
+#!/usr/bin/env node
+
+var fs = require('fs');
+var path   = require('path');
+var _   = require('lodash');
+var Promise = require("bluebird");
+var recursive = require('recursive-readdir');
+var fsextra = require("fs-extra");
+var yargs = require('yargs')
+    .usage('Usage: $0 <command> [options]')
+    .command('copy', '复制数据', {
+      storageDir: {
+        alias: 'storageDir',
+        type: 'string'
+      }
+    })
+    .command('move', '搬迁数据', {
+      storageDir: {
+        alias: 'storageDir',
+        type: 'string'
+      }
+    })
+    .example('$0 copy --storageDir \'/data/codepush/storage\'', '以文件名字头两个字母作为子目录复制存储文件')
+    .example('$0 move --storageDir \'/data/codepush/storage\'', '以文件名字头两个字母作为子目录搬迁存储文件')
+    .default({storageDir: null})
+    .help('h')
+    .alias('h', 'help');
+var argv = yargs.argv;
+var command = argv._[0];
+var storageDir = argv.storageDir;
+if (!storageDir) {
+    yargs.showHelp();
+    process.exit(1);
+}
+
+if (command === 'copy' || command === 'move') {
+    fs.readdir(storageDir, function (err, files) {
+      if (err)  {
+        console.log(err.message);
+        process.exit(1);
+      }
+      files.forEach(function(file) {
+        var fileName = path.resolve(storageDir, file);
+        fs.stat(fileName, function(err, stat) {
+          if (stat && !stat.isDirectory()) {
+            var subDir = file.substr(0, 2).toLowerCase();
+            if (fs.existsSync(`${storageDir}/${subDir}/${file}`)) {
+                if (command === 'move') {
+                    fsextra.remove(fileName, function(){
+                        console.log(`delete ${fileName} success.`);
+                    });
+                }
+                console.log(`process over: ${fileName}`);
+                return;
+            }
+            var finalDir = `${storageDir}/${subDir}`;
+            if (!fs.existsSync(`${finalDir}`)) {
+              fs.mkdirSync(`${finalDir}`);
+            }
+            fsextra.copy(fileName, `${storageDir}/${subDir}/${file}`,(err) => {
+              if (err) {
+                console.log(`copy error:${fileName}`);
+                return;
+              }
+              if (command === 'move') {
+                fsextra.remove(fileName, function(){
+                    console.log(`delete ${fileName} success.`);
+                });
+              }
+              console.log(`process over: ${fileName}`);
+            });
+          }
+        });
+      });
+    });
+} else {
+    yargs.showHelp();
+}
+
